@@ -2,13 +2,18 @@ package tjcrypt
 
 import (
 	"encoding/binary"
+	"errors"
 
 	lz4 "github.com/patelh/golz4"
 	"github.com/xxtea/xxtea-go/xxtea"
 )
 
-// Encrypt tjcrypt buffer
-func Encrypt(in []byte) ([]byte, error) {
+// Encrypt into tjcrypt buffer with provided key
+func EncryptWithCustomKey(in, key []byte) ([]byte, error) {
+	if len(key) != 16 {
+		return nil, errors.New("key length must be 16")
+	}
+
 	// compress
 	commpressSz := lz4.CompressBound(in)
 	compressed := make([]byte, commpressSz+4)
@@ -23,7 +28,7 @@ func Encrypt(in []byte) ([]byte, error) {
 	// prepare key
 	fixKey := make([]byte, 16)
 	for i := 0; i < 16; i++ {
-		fixKey[i] = TJ_DEFAULT_KEY[i%16] ^ TJ_PASSWORD[i]
+		fixKey[i] = TJ_DEFAULT_KEY[i%16] ^ key[i]
 	}
 
 	encrypted := xxtea.Encrypt(compressed, fixKey)
@@ -33,9 +38,14 @@ func Encrypt(in []byte) ([]byte, error) {
 	binary.LittleEndian.PutUint32(bufSz, dstSz)
 
 	out := []byte{'t', 'j', '!'}
-	out = append(out, []byte(TJ_PASSWORD)...)
+	out = append(out, []byte(key)...)
 	out = append(out, bufSz...)
 	out = append(out, encrypted...)
 
 	return out, nil
+}
+
+// Encrypt tjcrypt buffer
+func Encrypt(in []byte) ([]byte, error) {
+	return EncryptWithCustomKey(in, []byte(TJ_PASSWORD))
 }
