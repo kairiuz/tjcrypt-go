@@ -8,12 +8,7 @@ import (
 	"github.com/xxtea/xxtea-go/xxtea"
 )
 
-// Decrypt tjcrypt buffer
-func Decrypt(in []byte) ([]byte, error) {
-	if !checkHeader(in) {
-		return nil, errors.New("invalid header")
-	}
-
+func decryptXxteaLZ4(in []byte) ([]byte, error) {
 	// prepare key
 	fixKey := make([]byte, 16)
 	for i := 0; i < 16; i++ {
@@ -38,4 +33,45 @@ func Decrypt(in []byte) ([]byte, error) {
 	}
 
 	return final, nil
+}
+
+func decryptLZ4(in []byte) ([]byte, error) {
+	finalSz := binary.LittleEndian.Uint32(in[3:7])
+	uncompressedSz := binary.LittleEndian.Uint32(in[7:11])
+	if uncompressedSz != finalSz {
+		return nil, errors.New("decrypt mode z: finalSz != uncompressedSz")
+	}
+
+	compressed := in[11:]
+	final := make([]byte, finalSz)
+	_, err := lz4.Uncompress(compressed, final)
+	if err != nil {
+		return nil, err
+	}
+
+	return final, nil
+}
+
+// Decrypt tjcrypt buffer
+func Decrypt(in []byte) ([]byte, error) {
+	var (
+		final []byte
+		err   error
+	)
+
+	if !checkHeader(in) {
+		return nil, errors.New("invalid header")
+	}
+
+	mode := in[2]
+	switch mode {
+	case '!':
+		final, err = decryptXxteaLZ4(in)
+	case 'z':
+		final, err = decryptLZ4(in)
+	case 'e':
+		final, err = in[7:], nil // is this even an encryption
+	}
+
+	return final, err
 }
